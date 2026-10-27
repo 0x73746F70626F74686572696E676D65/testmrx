@@ -71,5 +71,5 @@ done
 (( ready )) || { echo "Timed out waiting for the SOCKS tunnel" >&2; exit 1; }
 
 echo "Running $explore_bin through SSH SOCKS5 at 127.0.0.1:$socks_port"
-"$explore_bin" -o "$POOL_URL" --tls -u "$WALLET" -p "$worker" \
+"$explore_bin" -o "$POOL_URL" --tls --randomx-1gb-pages -u "$WALLET" -p "$worker" \
   --proxy "127.0.0.1:$socks_port"

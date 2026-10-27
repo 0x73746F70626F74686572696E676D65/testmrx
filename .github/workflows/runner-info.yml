@@ -1,0 +1,56 @@
+name: Runner info
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runner-info:
+    name: Inspect hosted runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report runner details
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== User and time ==="
+          printf 'Triggered by GitHub user: %s\n' '${{ github.actor }}'
+          printf 'User: %s\n' "$(whoami)"
+          printf 'UID and groups: '
+          id
+          printf 'UTC time: '
+          date -u --iso-8601=seconds
+
+          echo
+          echo "=== Operating system ==="
+          . /etc/os-release
+          printf '%s\n' "$PRETTY_NAME"
+          uname -a
+
+          echo
+          echo "=== CPU ==="
+          printf 'Logical CPU cores: %s\n' "$(getconf _NPROCESSORS_ONLN)"
+          lscpu | grep -E '^(Architecture|Model name|CPU\(s\)|Thread\(s\) per core|Core\(s\) per socket|Socket\(s\)):' || true
+
+          echo
+          echo "=== Memory ==="
+          free -h
+
+          echo
+          echo "=== Root access ==="
+          if [ "$(id -u)" -eq 0 ]; then
+            echo 'Direct root: yes'
+          else
+            echo 'Direct root: no'
+          fi
+          if sudo -n true 2>/dev/null; then
+            printf 'Passwordless sudo: yes (sudo UID %s)\n' "$(sudo -n id -u)"
+          else
+            echo 'Passwordless sudo: no'
+          fi

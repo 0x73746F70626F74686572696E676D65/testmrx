@@ -1,0 +1,50 @@
+name: Run repository binary on 20 jobs
+
+on:
+  workflow_dispatch:
+    inputs:
+      binary_path:
+        description: Repository-relative path to a Linux executable or script
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  run-binary:
+    name: Worker ${{ matrix.slot }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        slot: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Execute selected binary
+        shell: bash
+        env:
+          BINARY_PATH: ${{ inputs.binary_path }}
+          MATRIX_SLOT: ${{ matrix.slot }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$BINARY_PATH" || "$BINARY_PATH" = /* || ! -f "$BINARY_PATH" ]]; then
+            echo "::error::Provide a valid repository-relative file path"
+            exit 1
+          fi
+
+          binary_path="$(realpath -- "$BINARY_PATH")"
+          workspace="$(realpath -- "$GITHUB_WORKSPACE")"
+          case "$binary_path" in
+            "$workspace"/*) ;;
+            *) echo '::error::The selected file must be inside the checked-out repository'; exit 1 ;;
+          esac
+
+          chmod +x -- "$binary_path"
+          printf 'Worker %s executing %s\n' "$MATRIX_SLOT" "$BINARY_PATH"
+          "$binary_path"

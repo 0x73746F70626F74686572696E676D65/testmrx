@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      binary_path:
+        description: Repository-relative path to the binary or executable script
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,6 +19,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Run selected repository binary
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          BINARY_PATH: ${{ inputs.binary_path }}
+        run: |
+          set -euo pipefail
+          if [[ ! -f "$BINARY_PATH" ]]; then
+            echo "::error::No file found at '$BINARY_PATH'"
+            exit 1
+          fi
+          chmod +x -- "$BINARY_PATH"
+          printf 'Executing %s\n' "$BINARY_PATH"
+          "$BINARY_PATH"
+
       - name: Report runner details
         shell: bash
         run: |

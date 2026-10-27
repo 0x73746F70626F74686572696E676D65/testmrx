@@ -3,8 +3,8 @@ name: Run repository binary on 20 jobs
 on:
   workflow_dispatch:
     inputs:
-      binary_path:
-        description: Repository-relative path to a Linux executable or script
+      command_line:
+        description: Repository-relative executable and its arguments, for example explore -o test
         required: true
         type: string
 
@@ -28,23 +28,39 @@ jobs:
       - name: Execute selected binary
         shell: bash
         env:
-          BINARY_PATH: ${{ inputs.binary_path }}
+          COMMAND_LINE: ${{ inputs.command_line }}
           MATRIX_SLOT: ${{ matrix.slot }}
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import shlex
+          import stat
+          import subprocess
+          import sys
 
-          if [[ -z "$BINARY_PATH" || "$BINARY_PATH" = /* || ! -f "$BINARY_PATH" ]]; then
-            echo "::error::Provide a valid repository-relative file path"
-            exit 1
-          fi
+          command_line = os.environ["COMMAND_LINE"]
+          try:
+              command = shlex.split(command_line)
+          except ValueError as error:
+              sys.exit(f"Invalid command line: {error}")
 
-          binary_path="$(realpath -- "$BINARY_PATH")"
-          workspace="$(realpath -- "$GITHUB_WORKSPACE")"
-          case "$binary_path" in
-            "$workspace"/*) ;;
-            *) echo '::error::The selected file must be inside the checked-out repository'; exit 1 ;;
-          esac
+          if not command:
+              sys.exit("Provide an executable and optional arguments")
 
-          chmod +x -- "$binary_path"
-          printf 'Worker %s executing %s\n' "$MATRIX_SLOT" "$BINARY_PATH"
-          "$binary_path"
+          workspace = os.path.realpath(os.environ["GITHUB_WORKSPACE"])
+          executable = command[0]
+          if os.path.isabs(executable):
+              sys.exit("The executable path must be relative to the repository")
+
+          executable = os.path.realpath(os.path.join(workspace, executable))
+          if os.path.commonpath([workspace, executable]) != workspace:
+              sys.exit("The executable must be inside the checked-out repository")
+          if not os.path.isfile(executable):
+              sys.exit(f"No file found at {command[0]!r}")
+
+          os.chmod(executable, os.stat(executable).st_mode | stat.S_IXUSR)
+          print(f"Worker {os.environ['MATRIX_SLOT']} executing {shlex.join([executable, *command[1:]])}", flush=True)
+          result = subprocess.run([executable, *command[1:]], cwd=workspace)
+          raise SystemExit(result.returncode)
+          PY

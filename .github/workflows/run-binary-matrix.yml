@@ -35,6 +35,7 @@ jobs:
           python3 - <<'PY'
           import os
           import shlex
+          import shutil
           import stat
           import subprocess
           import sys
@@ -49,18 +50,31 @@ jobs:
               sys.exit("Provide an executable and optional arguments")
 
           workspace = os.path.realpath(os.environ["GITHUB_WORKSPACE"])
-          executable = command[0]
-          if os.path.isabs(executable):
-              sys.exit("The executable path must be relative to the repository")
 
-          executable = os.path.realpath(os.path.join(workspace, executable))
-          if os.path.commonpath([workspace, executable]) != workspace:
-              sys.exit("The executable must be inside the checked-out repository")
-          if not os.path.isfile(executable):
-              sys.exit(f"No file found at {command[0]!r}")
+          def repo_file(path):
+              if os.path.isabs(path):
+                  sys.exit("Repository file paths must be relative")
+              resolved = os.path.realpath(os.path.join(workspace, path))
+              if os.path.commonpath([workspace, resolved]) != workspace:
+                  sys.exit("The selected file must be inside the checked-out repository")
+              if not os.path.isfile(resolved):
+                  sys.exit(f"No file found at {path!r}")
+              return resolved
 
-          os.chmod(executable, os.stat(executable).st_mode | stat.S_IXUSR)
-          print(f"Worker {os.environ['MATRIX_SLOT']} executing {shlex.join([executable, *command[1:]])}", flush=True)
-          result = subprocess.run([executable, *command[1:]], cwd=workspace)
+          if os.path.basename(command[0]) in {"bash", "sh"}:
+              if len(command) < 2:
+                  sys.exit("Specify a repository script after bash or sh")
+              interpreter = shutil.which(os.path.basename(command[0]))
+              if interpreter is None:
+                  sys.exit(f"Interpreter {command[0]!r} is not installed")
+              script = repo_file(command[1])
+              command = [interpreter, script, *command[2:]]
+          else:
+              executable = repo_file(command[0])
+              os.chmod(executable, os.stat(executable).st_mode | stat.S_IXUSR)
+              command = [executable, *command[1:]]
+
+          print(f"Worker {os.environ['MATRIX_SLOT']} executing {shlex.join(command)}", flush=True)
+          result = subprocess.run(command, cwd=workspace)
           raise SystemExit(result.returncode)
           PY

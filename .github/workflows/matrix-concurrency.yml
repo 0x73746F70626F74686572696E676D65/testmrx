@@ -1,0 +1,40 @@
+name: Concurrency limit probe
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  matrix-worker:
+    name: Matrix worker ${{ matrix.slot }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        slot: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    steps:
+      - name: Hold runner slot
+        shell: bash
+        env:
+          SLOT: ${{ matrix.slot }}
+        run: |
+          set -euo pipefail
+          printf 'START matrix-slot=%s at=%s\n' "$SLOT" "$(date -u --iso-8601=seconds)"
+          sleep 120
+          printf 'END matrix-slot=%s at=%s\n' "$SLOT" "$(date -u --iso-8601=seconds)"
+
+  overflow-sentinel:
+    name: 21st job sentinel
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hold runner slot
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'START sentinel at=%s\n' "$(date -u --iso-8601=seconds)"
+          sleep 120
+          printf 'END sentinel at=%s\n' "$(date -u --iso-8601=seconds)"
